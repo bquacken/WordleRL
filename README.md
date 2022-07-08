@@ -142,7 +142,7 @@ print('3B1B Average Number of Guesses per Win: '+str(np.mean(tb1b_performance)))
 ```
 
     A2C Wins: 2221
-    A2C Losses: 10751
+    A2C Losses: 88
     A2C Win Ratio: 0.9618882633174535
     A2C Average Number of Guesses per Win: 4.063484916704187
     3B1B Average Number of Guesses per Win: 3.878735383282806
