@@ -4,7 +4,8 @@ This project was inspired by [3Blue1Brown's](https://www.youtube.com/watch?v=v68
 
 
 
-![mp4](animation1.mp4)
+https://user-images.githubusercontent.com/68025393/179820191-076b72bc-2a58-47af-9140-8bb3327480ac.mp4
+
 
 
 # State and Action Representation
