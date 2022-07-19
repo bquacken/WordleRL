@@ -1,145 +1,43 @@
-# WordleRL
- Reinforcement Learning with Wordle
+# Reinforcement Learning with Wordle
 
-```python
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-import tensorflow as tf
-from tensorflow import keras
-from keras import layers
-import os
-```
-
-
-```python
-from Wordle import *
-from Player import *
-from Environment import *
-from AdvantageActorCritic import *
-from word_functions import *
-from get_word_funcs import *
-```
-
-# Import Model and Weights
-
-
-```python
-total_words, answer_words, acceptable_words = get_words(True)
-one_hot_total = one_hot_words().astype(np.float32)
-one_hot_ind = list(range(len(total_words)))
-```
-
-
-```python
-A2C = AdvantageActorCritic(one_hot_total, one_hot_ind)
-A2C.compile(optimizer = keras.optimizers.RMSprop(0.0001), loss = [critic_loss, actor_loss])
-A2C.load_weights('EMH_Model_Weights/Wordle2_AAC_weights_2222')
-```
+This project was inspired by [3Blue1Brown's](https://www.youtube.com/watch?v=v68zYyaEmEA) video on Wordle Strategies. After implementing the greedy one-step strategy presented in the video, I wanted to see how an RL agent could do in comparison. The RL implementation of the Advantage Actor Critic was heavily influenced by [Andrew Ho](https://wandb.ai/andrewkho/wordle-solver/reports/Solving-Wordle-with-Reinforcement-Learning--VmlldzoxNTUzOTc4) with some modifications. Below we can see an animation of how A2C performs:
 
 
 
-
-    <tensorflow.python.training.tracking.util.CheckpointLoadStatus at 0x1a2d010a0>
-
+![mp4](animation1.mp4)
 
 
-# Play a Game
+# State and Action Representation
+
+While this is quite similar to Andrew Ho's implementation, when using the state representation that was length 417, it seemed that my model was plateauing on the 100-word and 1000-word smaller games. To aid in this, I used the following state representation:
+
+- Position 0 is the number of guesses remaining in the game
+- Positions 1-26 document which letters have been attempted before, being a 1 if they had and a 0 if they have not
+- Positions 27-52 document which letters are known to be in the word, corresponding to a 1 if that letter is known to be yellow or green after guessing.
+- Positions 53 - 182 correspond to the concatenation of 26 one-hot vectors of length 3 corresponding to [No, Maybe, Yes]. This gives information for each letter of whether it belongs in the first position or not, or whether it is not known.
+- Positions 183-442 repeat the idea for positions 53-182 of the state vector, but corresponding to the second letter, third letter, and so on in the word.
+
+The key difference between my implementation of the state and what I was referencing is the addition of positions 27-52, as I felt that there could be more information added for getting a yellow letter. Without positions 27-52, I felt that having a yellow letter only changed the state in the sense of "this letter does not belong in this position," while leaving out the caveat of "but this letter IS found in the word."
+
+The action representation is identical to the reference: the model outputs a vector of length 130, notably 5x26, giving a value for how "good" it would be to guess that letter in that position (i.e. the last entry of this vector would be how "good" it would be to choose 'z' as the last letter). After outputting this vector, it is multiplied by a matrix of size (total number of words) by 130, in the case of the full game 12,972 by 130. Each row of this matrix looks like 5 one-hot vectors of length 26 concatenated together, displaying which letters showed up in which position. 
 
 
-```python
-"""If you have a specific word in mind replace "state" with some other word
-"""
-rand = np.random.choice(answer_words)
-env = Environment(rand)
-```
+## Comparing Guesses Between AdvantageActorCritic and 3Blue1Brown
 
-### A2C Performance
+<center>
 
+| 3Blue1Brown | AdvantageActorCritic |
+| :-- | :-- |
+| rates | siege |
+| login | pooch | 
+|lucky | alary |
+| <span style="color:green"> lumpy </span> | <span style="color:green"> lumpy </span>| 
 
-```python
-env = Environment(rand)
-while not env.wordle.over:
-    action, value = A2C.action_value(env.state[np.newaxis])
-    action = action.numpy()[0][0]
-    env.step(action)
-print(env.wordle.guesses)
-print(env.wordle.answer)
-```
-
-    ['siege', 'pooch', 'alary', 'lumpy']
-    lumpy
+</center>
 
 
-### 3Blue1Brown Performance
+## Comparing Performance Between the Two Strategies
 
-
-```python
-p = Player()
-env.reset(rand)
-p.reset()
-while not env.wordle.over:
-    action = np.where(total_words == p.exp_info_strategy())[0][0]
-    env.step(action)
-    p.guess(total_words[action], env.wordle.hints[-1])
-print(p.guesses)
-```
-
-    ['rates', 'login', 'lucky', 'lumpy']
-
-
-## Compare with 3Blue1Brown's Strategy
-
-
-```python
-def get_wordle_performance():
-    if os.path.exists('Data/3b1b_performance.npy'):
-        player_win_turns = np.load('Data/3b1b_performance.npy')
-    else:
-        player_win_turns = []
-        player_win_score = 0
-        env = Environment()
-        p = Player()
-        for answer in answer_words:
-            env.reset(answer)
-            p.reset()
-            while not env.wordle.over:
-                action = np.where(total_words == p.exp_info_strategy())[0][0]
-                env.step(action)
-                p.guess(total_words[action], env.wordle.hints[-1])
-            player_win_score += env.wordle.win
-            player_win_turns.append(env.num_guesses)
-        player_win_turns = np.array(player_win_turns)
-        np.save('Data/3b1b_performance.npy', player_win_turns)
-    return player_win_turns
-tb1b_performance = get_wordle_performance()
-        
-```
-
-
-```python
-nn_performance = []
-nn_avg = []
-wins = 0
-for answer in answer_words:
-    env.reset(answer)
-    while not env.wordle.over:
-        action, value = A2C.action_value(env.state[np.newaxis])
-        action = action.numpy()[0][0]
-        env.step(action)
-    if env.wordle.win:
-        wins+=1
-        nn_performance.append(env.wordle.guess_count)
-        nn_avg.append(env.wordle.guess_count)
-    else:
-        nn_performance.append(7)
-print('A2C Wins: '+str(wins))
-print('A2C Losses: '+ str(len(total_words) - wins))
-win_percentage = wins / len(answer_words)
-print('A2C Win Ratio: ' + str(win_percentage))
-print('A2C Average Number of Guesses per Win: '+str(np.mean(nn_avg)))
-print('3B1B Average Number of Guesses per Win: '+str(np.mean(tb1b_performance)))
-```
 
     A2C Wins: 2221
     A2C Losses: 88
@@ -149,57 +47,17 @@ print('3B1B Average Number of Guesses per Win: '+str(np.mean(tb1b_performance)))
 
 
 
-```python
-data = np.array(np.vstack((nn_performance, tb1b_performance))).transpose()
-df = pd.DataFrame(data, columns=['A2C', '3B1B'])
-```
-
-
-```python
-min_val = 2
-max_val = 6
-val_width = max_val - min_val
-n_bins = 6
-bin_width = val_width/n_bins
-print('A2C wins: ' +str(wins))
-#print('Player wins: ' +str(player_win_score))
-sns.histplot(data = df,
-             multiple='dodge',binwidth=None, legend=True )
-
-```
-
-    A2C wins: 2221
-
-
-
-
-
-    <AxesSubplot:ylabel='Count'>
-
-
-
-
+Below shows a histogram of the number of turns each strategy took to win the game, with 7 turns being a loss.
     
 ![png](output_15_2.png)
-    
+​    
 
 
 
-```python
-plt.hist(nn_performance, bins = 6, rwidth=0.8, align='left', density = True)
-plt.title('A2C Winning Performance')
-plt.xlabel('Number of Turns to Win')
-plt.ylabel('Proportion')
-plt.show()
-```
-
-
-    
+​    
 ![png](output_16_0.png)
-    
 
 
 
-```python
 
-```
+
